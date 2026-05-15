@@ -1,3 +1,11 @@
+## 1.13.0
+
+- Update of documentation.
+- Update dependencies.
+- [Fix user read handling without existing ID](https://github.com/dmpe/terraform-provider-storagegrid/pull/46) as fixed 
+by @Lenn97-prog. Thanks.
+
+
 ## 1.12.0
 
 - Update of documentation.

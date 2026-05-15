@@ -30,9 +30,9 @@ jobs:
       - run: go mod download
       - run: go build ./...
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.1
+          version: v2.12
 
   generate:
     runs-on: ubuntu-latest
