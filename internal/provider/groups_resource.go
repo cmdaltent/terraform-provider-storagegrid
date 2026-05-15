@@ -416,7 +416,7 @@ func (r *groupsResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	tflog.Debug(ctx, "1. Get refreshed group information.")
-	returnBody, respCode, err := r.readGroup(ctx, state.ID.ValueString(), state.UniqueName.ValueString())
+	returnBody, respCode, err := r.readGroup(state.ID.ValueString(), state.UniqueName.ValueString())
 	if err != nil {
 		if respCode == http.StatusNotFound {
 			resp.State.RemoveResource(ctx)
@@ -516,7 +516,7 @@ func (r *groupsResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 	var groupID = state.ID.ValueString()
 	if groupID == "" {
-		returnBody, _, err := r.readGroup(ctx, "", state.UniqueName.ValueString())
+		returnBody, _, err := r.readGroup("", state.UniqueName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve group ID for update, got error: %s", err))
 			return
@@ -682,7 +682,7 @@ func (r *groupsResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 	groupID := state.ID.ValueString()
 	if groupID == "" {
-		returnBody, respCode, err := r.readGroup(ctx, "", state.UniqueName.ValueString())
+		returnBody, respCode, err := r.readGroup("", state.UniqueName.ValueString())
 		if err != nil {
 			if respCode == http.StatusNotFound {
 				return
@@ -715,7 +715,7 @@ func (r *groupsResource) ImportState(ctx context.Context, req resource.ImportSta
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *groupsResource) readGroup(ctx context.Context, groupID string, uniqueName string) (groupsDataSourceGolangModelSingle, int, error) {
+func (r *groupsResource) readGroup(groupID string, uniqueName string) (groupsDataSourceGolangModelSingle, int, error) {
 	var returnBody groupsDataSourceGolangModelSingle
 
 	fullPath := api_groups + "/" + groupID

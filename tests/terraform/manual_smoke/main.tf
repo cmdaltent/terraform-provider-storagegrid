@@ -1,3 +1,6 @@
+# Copyright (c) github.com/dmpe
+# SPDX-License-Identifier: MIT
+
 # Copy this file to an empty directory as main.tf, or run it from this directory.
 # It creates real StorageGRID tenant objects. Use a disposable tenant if possible.
 
