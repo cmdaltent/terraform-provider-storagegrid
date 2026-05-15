@@ -158,7 +158,7 @@ func (r *usersResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if returnBody.Data.ID == "" {
-		returnBody, _, err = r.readUser(ctx, "", plan.UniqueName.ValueString())
+		returnBody, _, err = r.readUser("", plan.UniqueName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read created user, got error: %s", err))
 			return
@@ -202,7 +202,7 @@ func (r *usersResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 
 	tflog.Debug(ctx, "1. Get refreshed user information.")
-	returnBody, respCode, err := r.readUser(ctx, state.ID.ValueString(), state.UniqueName.ValueString())
+	returnBody, respCode, err := r.readUser(state.ID.ValueString(), state.UniqueName.ValueString())
 	if err != nil {
 		if respCode == http.StatusNotFound {
 			resp.State.RemoveResource(ctx)
@@ -264,7 +264,7 @@ func (r *usersResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	userID := state.ID.ValueString()
 	if userID == "" {
-		returnBody, _, err := r.readUser(ctx, "", state.UniqueName.ValueString())
+		returnBody, _, err := r.readUser("", state.UniqueName.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve user ID for update, got error: %s", err))
 			return
@@ -348,7 +348,7 @@ func (r *usersResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 	userID := state.ID.ValueString()
 	if userID == "" {
-		returnBody, respCode, err := r.readUser(ctx, "", state.UniqueName.ValueString())
+		returnBody, respCode, err := r.readUser("", state.UniqueName.ValueString())
 		if err != nil {
 			if respCode == http.StatusNotFound {
 				return
@@ -381,7 +381,7 @@ func (r *usersResource) ImportState(ctx context.Context, req resource.ImportStat
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *usersResource) readUser(ctx context.Context, userID string, uniqueName string) (UsersDataModelSingle, int, error) {
+func (r *usersResource) readUser(userID string, uniqueName string) (UsersDataModelSingle, int, error) {
 	var returnBody UsersDataModelSingle
 
 	fullPath := api_users + "/" + userID

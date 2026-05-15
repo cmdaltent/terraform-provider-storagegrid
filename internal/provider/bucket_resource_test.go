@@ -340,17 +340,17 @@ resource "storagegrid_bucket_versioning" "test" {
 func testBucketResource(name string, region *string, objectLockConfiguration *ObjectLockConfiguration) string {
 	builder := strings.Builder{}
 	builder.WriteString("resource \"storagegrid_bucket\" \"test\" {\n")
-	builder.WriteString(fmt.Sprintf("\tname = \"%s\"", name))
+	fmt.Fprintf(&builder, "\tname = \"%s\"", name)
 	if region != nil {
-		builder.WriteString(fmt.Sprintf("\n\tregion = \"%s\"", *region))
+		fmt.Fprintf(&builder, "\n\tregion = \"%s\"", *region)
 	}
 	if objectLockConfiguration != nil {
-		builder.WriteString(fmt.Sprintf("\n\tobject_lock_configuration {\n\t\tmode = \"%s\"", objectLockConfiguration.Mode.ValueString()))
+		fmt.Fprintf(&builder, "\n\tobject_lock_configuration {\n\t\tmode = \"%s\"", objectLockConfiguration.Mode.ValueString())
 		if objectLockConfiguration.Days.ValueInt64() != 0 {
-			builder.WriteString(fmt.Sprintf("\n\t\tdays = %d", objectLockConfiguration.Days.ValueInt64()))
+			fmt.Fprintf(&builder, "\n\t\tdays = %d", objectLockConfiguration.Days.ValueInt64())
 		}
 		if objectLockConfiguration.Years.ValueInt64() != 0 {
-			builder.WriteString(fmt.Sprintf("\n\t\tyears = %d", objectLockConfiguration.Years.ValueInt64()))
+			fmt.Fprintf(&builder, "\n\t\tyears = %d", objectLockConfiguration.Years.ValueInt64())
 		}
 		builder.WriteString("\n\t}")
 	}
