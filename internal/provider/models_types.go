@@ -317,6 +317,7 @@ type usersDataSourceDataModel struct {
 	Disable    types.Bool     `tfsdk:"disable"`
 	AccountId  types.String   `tfsdk:"account_id"`
 	ID         types.String   `tfsdk:"id"`
+	Import     types.Bool     `tfsdk:"import"`
 	Federated  types.Bool     `tfsdk:"federated"`
 	UserURN    types.String   `tfsdk:"user_urn"`
 }

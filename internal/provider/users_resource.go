@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -24,9 +25,10 @@ import (
 
 // Ensure provider-defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource                = &usersResource{}
-	_ resource.ResourceWithConfigure   = &usersResource{}
-	_ resource.ResourceWithImportState = &usersResource{}
+	_ resource.Resource                   = &usersResource{}
+	_ resource.ResourceWithConfigure      = &usersResource{}
+	_ resource.ResourceWithImportState    = &usersResource{}
+	_ resource.ResourceWithValidateConfig = &usersResource{}
 )
 
 // NewUsersResource returns a new resource instance.
@@ -37,6 +39,23 @@ func NewUsersResource() resource.Resource {
 // usersResource defines the resource implementation.
 type usersResource struct {
 	client *S3GridClient
+}
+
+func (r *usersResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config usersDataSourceDataModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.Import.ValueBool() {
+		return
+	}
+
+	if config.FullName.ValueString() == "" || len(config.MemberOf) == 0 {
+		resp.Diagnostics.AddError("Invalid configuration", "The FullName and MemberOf attributes must be set")
+		return
+	}
 }
 
 func (r *usersResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -53,7 +72,6 @@ func (r *usersResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Description: "The name this user will use to sign in. Usernames must be unique and cannot be changed.",
 			},
 			fl_name: schema.StringAttribute{
-				Required:    true,
 				Description: "The human-readable name for the User (required for local Users and imported automatically for federated Users)",
 				Validators: []validator.String{
 					// Must contain at least 1 and no more than 128 characters
@@ -70,7 +88,11 @@ func (r *usersResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"member_of": schema.ListAttribute{
 				ElementType: types.StringType,
 				Description: "Group memberships for this User (required for local Users and imported automatically for federated Users)",
-				Required:    true,
+			},
+			"import": schema.BoolAttribute{
+				Computed:    true,
+				Description: "True if the User is imported from an external source, for example, an LDAP User",
+				Default:     booldefault.StaticBool(false),
 			},
 			"federated": schema.BoolAttribute{
 				Computed:    true,
@@ -131,6 +153,29 @@ func (r *usersResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	var createdOrImportedUser *usersDataSourceDataModel
+
+	if plan.Import.ValueBool() {
+		createdOrImportedUser = r.importFederated(plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	} else {
+		createdOrImportedUser = r.create(ctx, plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Write logs using the tflog package
+	// Documentation: https://terraform.io/plugin/log
+	tflog.Trace(ctx, "created a new user / imported a federated user")
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, createdOrImportedUser)...)
+}
+
+func (r *usersResource) create(ctx context.Context, plan usersDataSourceDataModel, diags *diag.Diagnostics) *usersDataSourceDataModel {
 	tflog.Debug(ctx, "1. Create to json body and fill it with the passed variables.")
 	groupMembers := []string{}
 	for _, member := range plan.MemberOf {
@@ -146,33 +191,33 @@ func (r *usersResource) Create(ctx context.Context, req resource.CreateRequest, 
 	tflog.Debug(ctx, "2. Execute Request against REST api.")
 	httpResp, _, _, err := r.client.SendRequest("POST", api_users, body, 201)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create example, got error: %s", err))
-		return
+		diags.AddError("Client Error", fmt.Sprintf("Unable to create example, got error: %s", err))
+		return nil
 	}
 
 	var returnBody UsersDataModelSingle
 	tflog.Debug(ctx, "3. User has been created and now we unmarshal it to json object.")
 	if err := json.Unmarshal(httpResp, &returnBody); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse response, got error: %s", err))
-		return
+		diags.AddError("Client Error", fmt.Sprintf("Unable to parse response, got error: %s", err))
+		return nil
 	}
 
 	if returnBody.Data.ID == "" {
 		returnBody, _, err = r.readUser("", plan.UniqueName.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read created user, got error: %s", err))
-			return
+			diags.AddError("Client Error", fmt.Sprintf("Unable to read created user, got error: %s", err))
+			return nil
 		}
 		if returnBody.Data.ID == "" {
-			resp.Diagnostics.AddError("Client Error", "Created user response did not include an id")
-			return
+			diags.AddError("Client Error", "Created user response did not include an id")
+			return nil
 		}
 	}
 
 	tflog.Debug(ctx, "4. Mapping json body back to the state file.")
 	if !EqualElements(returnBody.Data.MemberOf, groupMembers) {
-		resp.Diagnostics.AddError("MemberOf Mismatch", fmt.Sprintf("Expected %v, got %v", groupMembers, returnBody.Data.MemberOf))
-		return
+		diags.AddError("MemberOf Mismatch", fmt.Sprintf("Expected %v, got %v", groupMembers, returnBody.Data.MemberOf))
+		return nil
 	}
 
 	plan.ID = types.StringValue(returnBody.Data.ID)
@@ -183,12 +228,49 @@ func (r *usersResource) Create(ctx context.Context, req resource.CreateRequest, 
 	plan.Disable = types.BoolValue(returnBody.Data.Disable)
 	plan.Federated = types.BoolValue(returnBody.Data.Federated)
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "created a new user")
+	return &plan
+}
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+func (r *usersResource) importFederated(plan usersDataSourceDataModel, diags *diag.Diagnostics) *usersDataSourceDataModel {
+	type userImportRequest struct {
+		UsernameOrUuid string `json:"usernameOrUUID"`
+	}
+
+	body := userImportRequest{
+		UsernameOrUuid: plan.UniqueName.ValueString(),
+	}
+
+	_, _, _, err := r.client.SendRequest("POST", "/grid/import-federated-user", body, 204)
+	if err != nil {
+		diags.AddError("Client Error", fmt.Sprintf("Unable to import federated user, got error: %s", err))
+		return nil
+	}
+
+	// TODO: find out if "shortName" is unique name w/o prefix
+	shortName := plan.UniqueName.ValueString()
+	httpResp, _, _, err := r.client.SendRequest("GET", fmt.Sprintf("/org/users/user/%s", shortName), nil, 200)
+	if err != nil {
+		diags.AddError("Client Error", fmt.Sprintf("Unable to read user, got error: %s", err))
+		return nil
+	}
+
+	var read UsersDataModelSingle
+	err = json.Unmarshal(httpResp, &read)
+	if err != nil {
+		diags.AddError("Client Error", fmt.Sprintf("Unable to unmarshal response body, got error: %s", err))
+		return nil
+	}
+
+	plan.ID = types.StringValue(read.Data.ID)
+	plan.UniqueName = types.StringValue(read.Data.UniqueName)
+	plan.FullName = types.StringValue(read.Data.FullName)
+	plan.Federated = types.BoolValue(read.Data.Federated)
+	plan.AccountId = types.StringValue(read.Data.AccountId)
+	plan.UserURN = types.StringValue(read.Data.UserURN)
+	plan.AccountId = types.StringValue(read.Data.AccountId)
+	// TODO: implement memberOf
+
+	return &plan
 }
 
 func (r *usersResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
