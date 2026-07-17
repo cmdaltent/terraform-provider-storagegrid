@@ -1,4 +1,4 @@
-// Copyright (c) github.com/dmpe
+// Copyright github.com/dmpe 2024, 2026
 // SPDX-License-Identifier: MIT
 
 package provider
@@ -234,6 +234,7 @@ func (p *storagegridProvider) Resources(ctx context.Context) []func() resource.R
 		NewS3AccessSecretKeyCurrentUserResource,
 		NewS3AccessSecretKeyResource,
 		NewUsersResource,
+		NewFederatedUsersResource,
 	}
 }
 

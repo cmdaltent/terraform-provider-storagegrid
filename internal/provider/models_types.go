@@ -1,4 +1,4 @@
-// Copyright (c) github.com/dmpe
+// Copyright github.com/dmpe 2024, 2026
 // SPDX-License-Identifier: MIT
 
 package provider
@@ -433,7 +433,7 @@ type ObjectLockConfiguration struct {
 // BucketApiRequestModel is the representation of a bucket in the API and is used for CRUD operations.
 type BucketApiRequestModel struct {
 	Name         string        `json:"name"`
-	Region       string        `json:"region"`
+	Region       string        `json:"region,omitempty"`
 	S3ObjectLock *S3ObjectLock `json:"s3ObjectLock,omitempty"`
 }
 
