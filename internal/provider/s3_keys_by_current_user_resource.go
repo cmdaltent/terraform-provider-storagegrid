@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces.
+// Ensure provider-defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &s3AccessSecretKeyCurrentUserResource{}
 	_ resource.ResourceWithConfigure   = &s3AccessSecretKeyCurrentUserResource{}
@@ -34,11 +34,11 @@ type s3AccessSecretKeyCurrentUserResource struct {
 	client *S3GridClient
 }
 
-func (r *s3AccessSecretKeyCurrentUserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *s3AccessSecretKeyCurrentUserResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_s3_access_key_current_user"
 }
 
-func (r *s3AccessSecretKeyCurrentUserResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *s3AccessSecretKeyCurrentUserResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
@@ -79,7 +79,7 @@ func (r *s3AccessSecretKeyCurrentUserResource) Schema(ctx context.Context, req r
 	}
 }
 
-func (r *s3AccessSecretKeyCurrentUserResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *s3AccessSecretKeyCurrentUserResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -130,15 +130,21 @@ func (r *s3AccessSecretKeyCurrentUserResource) Create(ctx context.Context, req r
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse response, got error: %s", err))
 		return
 	}
-	fmt.Println(returnBody.Data)
-	tflog.Debug(ctx, "4. Mapping json body back to the state file.")
+
+	tflog.Debug(ctx, "4. Check if expires field is the same data as planned")
+	if expiresConfig.ValueString() != "" && !EqualDates(plan.Expires.ValueString(), returnBody.Data.Expires) {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Expiration date received from API differs. Received: %s, Planned: %s", returnBody.Data.Expires, plan.Expires.ValueString()))
+		return
+	}
+
+	tflog.Debug(ctx, "5. Mapping json body back to the state file.")
 	acsKeyData := &S3AccessKeyResourceModel{
 		ID:              types.StringValue(returnBody.Data.ID),
 		AccountId:       types.StringValue(returnBody.Data.AccountId),
 		DisplayName:     types.StringValue(returnBody.Data.DisplayName),
 		UserURN:         types.StringValue(returnBody.Data.UserURN),
 		UserUUID:        types.StringValue(returnBody.Data.UserUUID),
-		Expires:         types.StringValue(returnBody.Data.Expires),
+		Expires:         types.StringValue(plan.Expires.ValueString()),
 		AccessKey:       types.StringValue(returnBody.Data.AccessKey),
 		SecretAccessKey: types.StringValue(returnBody.Data.SecretAccessKey),
 	}
@@ -238,7 +244,7 @@ func (r *s3AccessSecretKeyCurrentUserResource) Read(ctx context.Context, req res
 		DisplayName:     types.StringValue(returnBody.Data.DisplayName),
 		UserURN:         types.StringValue(returnBody.Data.UserURN),
 		UserUUID:        types.StringValue(returnBody.Data.UserUUID),
-		Expires:         types.StringValue(returnBody.Data.Expires),
+		Expires:         state.Expires,
 		AccessKey:       state.AccessKey,
 		SecretAccessKey: state.SecretAccessKey,
 	}
@@ -253,7 +259,7 @@ func (r *s3AccessSecretKeyCurrentUserResource) Read(ctx context.Context, req res
 	}
 }
 
-func (r *s3AccessSecretKeyCurrentUserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *s3AccessSecretKeyCurrentUserResource) Update(ctx context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
 	tflog.Trace(ctx, "There is nothing to update - cannot be done")
 	resp.Diagnostics.AddError("Not implemented", "There is nothing to update - cannot be done")
 }
