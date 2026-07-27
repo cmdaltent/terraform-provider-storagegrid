@@ -2,7 +2,7 @@
 
 This is a terraform provider plugin for [NetApp StorageGRID S3](https://www.netapp.com/data-storage/storagegrid/) system.
 
-**Update Summer 2025**:
+**Update Summer 2026**:
 I no longer work at the company which has access to the StorageGrid system. 
 As a result, I am no longer able to conduct any tests and rely on contributors to 1) find and 2) fix any issues. 
 
